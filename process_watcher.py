@@ -6,6 +6,10 @@ from datetime import datetime
 import argparse
 import os.path as P
 
+import smtplib
+from email.mime.text import MIMEText
+
+
 # Information text format for ProcessByPID class
 INFO_RUNNING_FORMAT="""PID {pid}: {command}
  Started: {created_datetime:%a, %b %d %H:%M:%S}"""
@@ -26,6 +30,8 @@ parser.add_argument('-p', '--pid', help='process ID(s) to watch (may specify '
                                         '-p multiple times)',
                     type=int,
                     action='append')
+parser.add_argument('--to', help='email address to send to when a process completes. (may specify multiple times)',
+                    action='append')
 parser.add_argument('-i', '--interval', help='how often to check on processes (seconds) default: 15',
                     type=float, default=15.0)
 parser.add_argument('-q', '--quiet', help="don't print anything to stdout",
@@ -45,11 +51,24 @@ if args.quiet:
         pass
 
 
-def notify():
-    # mailx
-    pass
+def send_emails(process):
+    """Send email about the ended process"""
+    body = process.info()
+    body += '\n\n(automatically sent by {} program)'.format(sys.argv[0])
+    msg = MIMEText(body)
+    msg['Subject'] = '{executable} process {pid} ended'.format(**process.__dict__)
+    # From is required
+    msg['From'] = 'process.watcher@localhost'
+    msg['To'] = ', '.join(args.to)
 
-# class Notifier
+    # Send the message via our own SMTP server.
+    s = smtplib.SMTP('localhost')
+    try:
+        print('Sending email to: {}'.format(msg['To']))
+        s.send_message(msg)
+    finally:
+        s.quit()
+
 
 #FIXME how to do by name? ps -C name
 #
@@ -94,6 +113,7 @@ class ProcessByPID:
             cmd = f.read()
             # args are separated by \x00 (Null byte)
             self.command = cmd.replace('\x00', ' ').strip()
+            self.executable = self.command.split()[0]
 
         # Get the start time (/proc/PID file creation time)
         self.created_datetime = datetime.fromtimestamp(P.getctime(path))
@@ -159,33 +179,36 @@ class ProcessByPID:
         return running
 
 # List of all the watching objects
-watchers = []
+processes = []
 
 # Initial check on processes, get metadata
 try:
-    watchers += (ProcessByPID(pid) for pid in args.pid)
+    processes += (ProcessByPID(pid) for pid in args.pid)
 
 except NoProcessFound as ex:
     print('No process with PID {}'.format(ex.pid))
     sys.exit(1)
 
-print('Watching {} processes:'.format(len(watchers)))
-for w in watchers:
-    print(w.info())
+print('Watching {} processes:'.format(len(processes)))
+for p in processes:
+    print(p.info())
 
 try:
     while True:
         time.sleep(args.interval)
         # Need to iterate copy since removing within loop.
-        for w in watchers[:]:
-            running = w.check()
+        for p in processes[:]:
+            running = p.check()
 
             if not running:
-                print('Process stopped:')
-                print(w.info())
-                watchers.remove(w)
+                processes.remove(p)
 
-        if not watchers:
+                print('Process stopped:')
+                print(p.info())
+
+                send_emails(p)
+
+        if not processes:
             sys.exit()
 
 except KeyboardInterrupt:
