@@ -6,9 +6,6 @@ from datetime import datetime
 import argparse
 import os.path as P
 
-import smtplib
-from email.mime.text import MIMEText
-
 
 # Information text format for ProcessByPID class
 INFO_RUNNING_FORMAT="""PID {pid}: {command}
@@ -50,24 +47,12 @@ if args.quiet:
     def print(*args, **kwargs):
         pass
 
-
-def send_emails(process):
-    """Send email about the ended process"""
-    body = process.info()
-    body += '\n\n(automatically sent by {} program)'.format(sys.argv[0])
-    msg = MIMEText(body)
-    msg['Subject'] = '{executable} process {pid} ended'.format(**process.__dict__)
-    # From is required
-    msg['From'] = 'process.watcher@localhost'
-    msg['To'] = ', '.join(args.to)
-
-    # Send the message via our own SMTP server.
-    s = smtplib.SMTP('localhost')
-    try:
-        print('Sending email to: {}'.format(msg['To']))
-        s.send_message(msg)
-    finally:
-        s.quit()
+# Load communication protocols based present arguments
+# (library, send function keyword args)
+comms = []
+if args.to:
+    import communicate.email
+    comms.append((communicate.email, dict(to=args.to)))
 
 
 #FIXME how to do by name? ps -C name
@@ -190,23 +175,23 @@ except NoProcessFound as ex:
     sys.exit(1)
 
 print('Watching {} processes:'.format(len(processes)))
-for p in processes:
-    print(p.info())
+for process in processes:
+    print(process.info())
 
 try:
     while True:
         time.sleep(args.interval)
         # Need to iterate copy since removing within loop.
-        for p in processes[:]:
-            running = p.check()
-
+        for process in processes[:]:
+            running = process.check()
             if not running:
-                processes.remove(p)
+                processes.remove(process)
 
                 print('Process stopped:')
-                print(p.info())
+                print(process.info())
 
-                send_emails(p)
+                for comm, send_args in comms:
+                    comm.send(process=process, **send_args)
 
         if not processes:
             sys.exit()
