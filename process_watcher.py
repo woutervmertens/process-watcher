@@ -9,7 +9,7 @@ import logging
 
 from process import *
 
-logging.basicConfig()
+logging.basicConfig(format='%(levelname)s: %(message)s')
 
 # Remember to update README.md after modifying
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -57,14 +57,25 @@ if args.to:
         import communicate.email
         comms.append((communicate.email, {'to': args.to}))
     except:
-        logging.exception('Failed to load email module.')
+        logging.exception('Failed to load email module. (required by --to)')
+        sys.exit(1)
 
 if args.notify:
+    exception_message = 'Failed to load Desktop Notification module. (required by --notify)'
     try:
         import communicate.dbus_notify
         comms.append((communicate.dbus_notify, {}))
+    except ImportError as err:
+        if err.name == 'notify2':
+            logging.error("{}\n 'notify2' python module not installed.\n"
+                          " pip install notify2"
+                          " (you also need to install the python3-dbus system package)".format(exception_message))
+        else:
+            logging.exception(exception_message)
+        sys.exit(1)
     except:
-        logging.exception('Failed to load Desktop Notification module.')
+        logging.exception(exception_message)
+        sys.exit(1)
 
 
 # dict of all the process watching objects pid -> ProcessByPID
