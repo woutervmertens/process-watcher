@@ -20,6 +20,12 @@ PID 18851: /usr/lib/libreoffice/program/soffice.bin --writer --splash-pipe=5
  Started: Thu, Mar 10 18:33:37  Ended: Thu, Mar 10 18:34:26  (duration 0:00:49)
  Memory (current/peak) - Resident: 155,280 / 155,304 kB   Virtual: 1,166,968 / 1,188,216 kB
 ```
+## Alternatives
+
+If you are looking for a more substantial daemon monitoring system, people recommend [Monit](https://mmonit.com/monit)
+
+> Monit is a small Open Source utility for managing and monitoring Unix systems. Monit conducts automatic maintenance and repair and can execute meaningful causal actions in error situations.
+
 # Installation
 
 Just create a symbolic link to **process_watcher.py**
