@@ -11,25 +11,28 @@ from process import *
 
 logging.basicConfig()
 
+# Remember to update README.md after modifying
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
                                  description="""Watch a process and notify when it completes via various \
-communication protocols. (See README.md for help installing dependencies)
+communication protocols.
+(See README.md for help installing dependencies)
 
---pid, --command, --to may be specified multiple times. For example:
-{exec} -p 123 -p 456 -c exec1 -c exec2 -c exec3 --to person1@domain.com --to person2@someplace.com
-""".format(exec=sys.argv[0]))
-parser.add_argument('-p', '--pid', help='process ID(s) to watch',
+[+] indicates the argument may be specified multiple times, for example:
+ %(prog)s -p 1234 -p 4258 -c myapp -c "exec\d+" --to person1@domain.com --to person2@someplace.com
+""")
+
+parser.add_argument('-p', '--pid', help='process ID(s) to watch [+]',
                     type=int,
                     action='append', default=[])
-parser.add_argument('-c', '--command', help='Watch all processes matching the command name. (RegEx pattern)',
-                    action='append', default=[])
-parser.add_argument('-w', '--watch-new', help='Watch for new processes that match --command.\n'
-                                              '(causes program to run forever)', action='store_true')
-parser.add_argument('--to', help='email address to send to when a process completes.',
-                    action='append')
+parser.add_argument('-c', '--command', help='watch all processes matching the command name. (RegEx pattern) [+]',
+                    action='append', default=[], metavar='COMMAND_PATTERN')
+parser.add_argument('-w', '--watch-new', help='watch for new processes that match --command. '
+                                              '(run forever)', action='store_true')
+parser.add_argument('--to', help='email address to send to [+]',
+                    action='append', metavar='EMAIL_ADDRESS')
 parser.add_argument('-n', '--notify', help='send DBUS Desktop notification', action='store_true')
-parser.add_argument('-i', '--interval', help='how often to check on processes (seconds)\ndefault interval: 15',
-                    type=float, default=15.0)
+parser.add_argument('-i', '--interval', help='how often to check on processes. (default: 15.0 seconds)',
+                    type=float, default=15.0, metavar='SECONDS')
 parser.add_argument('-q', '--quiet', help="don't print anything to stdout",
                     action='store_true')
 
