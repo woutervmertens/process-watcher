@@ -5,6 +5,11 @@
 Currently, **process-watcher** just manually polls /proc
 There are other, potentially better ways to watch processes.
 
+**Goals:**
+
+- Get exit code when process ends.
+- Guarantee short-lived processes are found. (appear during sleep)
+
 ## ptrace
 
 **python-ptrace**
@@ -17,11 +22,18 @@ process = debugger.addProcess(pid, is_attached=False)
 process.waitEvent()
 ```
 
-However, in Ubuntu and probably other distros, permissions are locked down by default.
+However, in Ubuntu and probably other distros, [permissions are locked down by default](https://wiki.ubuntu.com/SecurityTeam/Roadmap/KernelHardening#ptrace).
 
 ```
 sudo su -
 echo 0 > /proc/sys/kernel/yama/ptrace_scope
+```
+
+A better way to grant permissions is with **libcap-bin** as [described here](http://askubuntu.com/questions/146160/what-is-the-ptrace-scope-workaround-for-wine-programs-and-are-there-any-risks)
+
+```
+sudo apt-get install libcap2-bin 
+sudo setcap cap_sys_ptrace=eip /usr/bin/wineserver
 ```
 
 Also, I worry that attaching the debugger may actually slow down the process you're watching or have other negative affects. And because wait blocks this technique requires some thought (threading?).

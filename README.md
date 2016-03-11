@@ -1,12 +1,13 @@
 # process-watcher
-Watch Linux processes and notify when they complete.
-Should also work with MacOS, please let me know if it does or needs a few fixes to be compatible.
+Watch Linux processes and notify when they complete. Should also work with MacOS*.
 
-Only needs the */proc* pseudo-filesystem to check and gather information about processes.
+Only needs the */proc* pseudo-filesystem to check and gather information about processes. Does not need to create/own the process, if you want a daemon manager, see the *Alternatives* section below.
 
 Currently written for **Python3**, but shouldn't be difficult to make python2 compatible.
 
-**Supported Notification Methods:**
+*\* If you run process-watcher on MacOS and it works, let me know so I can update the documentation.* 
+
+**Supported notification methods:**
 
 * Console (STDOUT)
 * Email
@@ -14,7 +15,7 @@ Currently written for **Python3**, but shouldn't be difficult to make python2 co
 
 **Example output message**
 
-*Sent in body of messages. Other information from /proc/PID can easily be added by modifying the code.*
+*Sent in body of messages. Other information from /proc/PID/status can easily be added by modifying the code.*
 ```
 PID 18851: /usr/lib/libreoffice/program/soffice.bin --writer --splash-pipe=5
  Started: Thu, Mar 10 18:33:37  Ended: Thu, Mar 10 18:34:26  (duration 0:00:49)
@@ -25,6 +26,8 @@ PID 18851: /usr/lib/libreoffice/program/soffice.bin --writer --splash-pipe=5
 If you are looking for a more substantial daemon monitoring system, people recommend [Monit](https://mmonit.com/monit)
 
 > Monit is a small Open Source utility for managing and monitoring Unix systems. Monit conducts automatic maintenance and repair and can execute meaningful causal actions in error situations.
+
+There is also [upstart](http://upstart.ubuntu.com), which Ubuntu and some other Linux distros have installed. See [Keeping Daemons alive with Upstart](http://www.alexreisner.com/code/upstart).
 
 # Installation
 
