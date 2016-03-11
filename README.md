@@ -116,3 +116,6 @@ These are some ideas and known issues I have; if any of these is particularly im
 - Add --command-args option
 - RegEx flags
 - Make installable from pip
+- [Pushover](https://pushover.net/) comm protocol
+- IRC
+- Separate communication code into another project after adding a few more protocols to make it more useful to people. Config file for setup and message templates. Investigate other python libs first. 
