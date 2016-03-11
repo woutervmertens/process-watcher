@@ -5,7 +5,7 @@ Only needs the */proc* pseudo-filesystem to check and gather information about p
 
 Currently written for **Python3**, but shouldn't be difficult to make python2 compatible.
 
-*\* If you run process-watcher on MacOS and it works, let me know so I can update the documentation.* 
+\**If you run process-watcher on MacOS and it works, let me know so I can update the documentation.* 
 
 **Supported notification methods:**
 
