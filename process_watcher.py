@@ -2,34 +2,33 @@
 
 import sys
 import time
-from datetime import datetime
 import argparse
-import os.path as P
+from argparse import RawTextHelpFormatter
+import re
+import logging
 
+from process import *
 
-# Information text format for ProcessByPID class
-INFO_RUNNING_FORMAT="""PID {pid}: {command}
- Started: {created_datetime:%a, %b %d %H:%M:%S}"""
+logging.basicConfig()
 
-INFO_ENDED_FORMAT=INFO_RUNNING_FORMAT + "  Ended: {ended_datetime:%a, " \
-                                        "%b %d %H:%M:%S}  (duration {" \
-                                        "duration_text})"
+parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
+                                 description="""Watch a process and notify when it completes via various \
+communication protocols. (See README.md for help installing dependencies)
 
-MEM_TEXT = "\n Memory (current/peak) - " \
-           "Resident: {status[VmRSS]:,} / {status[VmHWM]:,} kB   " \
-           "Virtual: {status[VmSize]:,} / {status[VmPeak]:,} kB"
-
-INFO_RUNNING_FORMAT += MEM_TEXT
-INFO_ENDED_FORMAT += MEM_TEXT
-
-parser = argparse.ArgumentParser(description='Watch a process and notify when it completes.')
-parser.add_argument('-p', '--pid', help='process ID(s) to watch (may specify '
-                                        '-p multiple times)',
+--pid, --command, --to may be specified multiple times. For example:
+{exec} -p 123 -p 456 -c exec1 -c exec2 -c exec3 --to person1@domain.com --to person2@someplace.com
+""".format(exec=sys.argv[0]))
+parser.add_argument('-p', '--pid', help='process ID(s) to watch',
                     type=int,
+                    action='append', default=[])
+parser.add_argument('-c', '--command', help='Watch all processes matching the command name. (RegEx pattern)',
+                    action='append', default=[])
+parser.add_argument('-w', '--watch-new', help='Watch for new processes that match --command.\n'
+                                              '(causes program to run forever)', action='store_true')
+parser.add_argument('--to', help='email address to send to when a process completes.',
                     action='append')
-parser.add_argument('--to', help='email address to send to when a process completes. (may specify multiple times)',
-                    action='append')
-parser.add_argument('-i', '--interval', help='how often to check on processes (seconds) default: 15',
+parser.add_argument('-n', '--notify', help='send DBUS Desktop notification', action='store_true')
+parser.add_argument('-i', '--interval', help='how often to check on processes (seconds)\ndefault interval: 15',
                     type=float, default=15.0)
 parser.add_argument('-q', '--quiet', help="don't print anything to stdout",
                     action='store_true')
@@ -51,141 +50,61 @@ if args.quiet:
 # (library, send function keyword args)
 comms = []
 if args.to:
-    import communicate.email
-    comms.append((communicate.email, dict(to=args.to)))
+    try:
+        import communicate.email
+        comms.append((communicate.email, {'to': args.to}))
+    except:
+        logging.exception('Failed to load email module.')
+
+if args.notify:
+    try:
+        import communicate.dbus_notify
+        comms.append((communicate.dbus_notify, {}))
+    except:
+        logging.exception('Failed to load Desktop Notification module.')
 
 
-#FIXME how to do by name? ps -C name
-#
-# TODO option to check for new processes with name every time, or only at beginning?
+# dict of all the process watching objects pid -> ProcessByPID
+# items removed when process ends
+processes = {}
 
-class NoProcessFound(Exception):
-    """Indicate a process could not be found."""
-    def __init__(self, pid):
-        super(NoProcessFound, self).__init__('No process with PID {}'
-                                             .format(pid))
-        self.pid = pid
-
-
-class ProcessByPID:
-    """Information about a process using the /proc filesystem"""
-
-    # /proc/<PID>/status fields to record
-    # WARNING: Must list fields in order found in file for update_status()
-    # algorithm to work. (done for efficiency)
-    # Also, fields are assumed to be int
-    status_fields = ('VmPeak', 'VmSize', 'VmHWM', 'VmRSS')
-
-    # Values will be stored in object as _status_X
-
-    def __init__(self, pid):
-
-        self.pid = pid
-
-        # Mapping of each status_fields to value from the status file.
-        # Initialize fields to zero in case info() is called.
-        self.status = {field: 0 for field in self.status_fields}
-
-        self.path = path = P.join('/proc', str(pid))
-        if not P.exists(path):
-            raise NoProcessFound(pid)
-
-        self.status_path = P.join(path, 'status')
-        self.running = True
-
-        # Get the command that started the process
-        with open(P.join(path, 'cmdline')) as f:
-            cmd = f.read()
-            # args are separated by \x00 (Null byte)
-            self.command = cmd.replace('\x00', ' ').strip()
-            self.executable = self.command.split()[0]
-
-        # Get the start time (/proc/PID file creation time)
-        self.created_datetime = datetime.fromtimestamp(P.getctime(path))
-
-        self.update_status()
-
-    def info(self):
-        """Get information about process.
-        command, start_time"""
-
-        if self.running:
-            return INFO_RUNNING_FORMAT.format(**self.__dict__)
-        else:
-            return INFO_ENDED_FORMAT.format(**self.__dict__)
-
-    def update_status(self):
-        """Update memory statistics"""
-        # Memory information can be found in status and statm /proc/PID files
-        # status file VmRSS equivalent to top's RES column
-        # statm disagrees with status VmRSS, I think it may not include
-        # sub-processes
-        # From: man proc
-        #       * VmPeak: Peak virtual memory size.
-        #       * VmSize: Virtual memory size.
-        #       * VmHWM: Peak resident set size ("high water mark").
-        #       * VmRSS: Resident set size.
-
-        fields = iter(self.status_fields)
-        field = next(fields)
-        with open(self.status_path) as f:
-            for line in f:
-                if line.startswith(field):
-                    # separated by white-space, 2nd element is value
-                    # 3rd is units e.g. kB
-                    # At the moment all fields are ints
-                    self.status[field] = int(line.split()[1])
-
-                    try:
-                        field = next(fields)
-                    except StopIteration:
-                        break
-
-    def check(self):
-        """Check whether process is running and update stats
-        :return True if running, otherwise False
-        """
-
-        if not self.running:
-            return False
-
-        running = P.exists(self.path)
-        if running:
-            self.update_status()
-        else:
-            # Process ended since last check, recond end time
-            self.running = False
-            self.ended_datetime = datetime.now()
-            self.duration = self.ended_datetime - self.created_datetime
-            # Looks like 3:06:29.873626   cutoff microseconds
-            text = str(self.duration)
-            self.duration_text = text[:text.rfind('.')]
-
-        return running
-
-# List of all the watching objects
-processes = []
-
-# Initial check on processes, get metadata
+# Initialize processes from arguments, get metadata
 try:
-    processes += (ProcessByPID(pid) for pid in args.pid)
+    for pid in args.pid:
+        if pid not in processes:
+            processes[pid] = ProcessByPID(pid)
 
 except NoProcessFound as ex:
     print('No process with PID {}'.format(ex.pid))
     sys.exit(1)
 
+command_regexs = [re.compile(pat) for pat in args.command]
+if command_regexs:
+    new_processes = all_processes(yield_None=True)
+    for pid in pids_with_command_name(new_processes, *command_regexs):
+        if pid not in processes:
+            processes[pid] = ProcessByPID(pid)
+
+# Whether program needs to check for new processes matching conditions
+watch_new = args.watch_new and len(command_regexs) > 0
+
+if not processes and not watch_new:
+    print('No processes found to watch.')
+    sys.exit()
+
 print('Watching {} processes:'.format(len(processes)))
-for process in processes:
+for pid, process in processes.items():
     print(process.info())
 
 try:
+    to_delete = []
     while True:
         time.sleep(args.interval)
         # Need to iterate copy since removing within loop.
-        for process in processes[:]:
+        for pid, process in processes.items():
             running = process.check()
             if not running:
-                processes.remove(process)
+                to_delete.append(pid)
 
                 print('Process stopped:')
                 print(process.info())
@@ -193,7 +112,19 @@ try:
                 for comm, send_args in comms:
                     comm.send(process=process, **send_args)
 
-        if not processes:
+        if to_delete:
+            for pid in to_delete:
+                del processes[pid]
+
+            to_delete.clear()
+
+        if watch_new:
+            for pid in pids_with_command_name(new_processes, *command_regexs):
+                if pid not in processes:
+                    processes[pid] = p = ProcessByPID(pid)
+                    print(p.info())
+
+        elif not processes:
             sys.exit()
 
 except KeyboardInterrupt:
