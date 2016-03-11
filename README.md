@@ -12,34 +12,40 @@ Currently written for **Python3**, but shouldn't be difficult to make python2 co
 * Email
 * Desktop Notification
 
-**Output message**
-> PID 18851: /usr/lib/libreoffice/program/soffice.bin --writer --splash-pipe=5
->  Started: Thu, Mar 10 18:33:37  Ended: Thu, Mar 10 18:34:26  (duration 0:00:49)
->  Memory (current/peak) - Resident: 155,280 / 155,304 kB   Virtual: 1,166,968 / 1,188,216 kB
+**Example output message**
 
+*Sent in body of messages. Other information from /proc/PID can easily be added by modifying the code.*
+```
+PID 18851: /usr/lib/libreoffice/program/soffice.bin --writer --splash-pipe=5
+ Started: Thu, Mar 10 18:33:37  Ended: Thu, Mar 10 18:34:26  (duration 0:00:49)
+ Memory (current/peak) - Resident: 155,280 / 155,304 kB   Virtual: 1,166,968 / 1,188,216 kB
+```
 # Installation
 
 Just create a symbolic link to **process_watcher.py**
 
 For example: `ln -s path/to/process-watcher/process_watcher.py /usr/local/bin/process_watcher`
 
-*I realize there may be a better way to package this. If you have suggestions to make this installable in the pip world create an issue or PR.*
+*I realize there are better ways to package this; if you have suggestions let me know.*
 
 # Running
 
 The program just runs until all processes end or forever if *--watch-new* is specified.
 
 In Unix environments you can run a program in the background and disconnect from the terminal like this:
-`nohup process_watcher.py ARGs &` 
+`nohup process_watcher ARGs &` 
 
 ## Examples
 Send an email when process 1234 exits.
+
 `process_watcher --pid 1234 --to me@gmail.com`
 
 Watch all **myapp** processes and continue to watch for new ones. Send desktop notifications.
+
 `process_watcher --command myapp --notify --watch-new`
 
 Watch 2 PIDs, continue to watch for multiple command name patterns, email two people.
+
 `process_watcher -p 4242 -p 5655 -c myapp -c anotherapp -c "kworker/[24]" -w --to bob@gmail.com --to alice@gmail.com`
 
 ## Help
@@ -68,9 +74,11 @@ optional arguments:
 ## Desktop Notifications
 
 Requires [notify2](https://notify2.readthedocs.org/en/latest)
+
 `pip install notify2`
 
 Requires **python-dbus**, which is easiest to install with your package manager:
+
 `sudo apt-get install python3-dbus`
 
 ## Email
@@ -91,6 +99,7 @@ These are some ideas and known issues I have; if any of these is particularly im
 - Recycled PIDs won't be detected in --watch-new mode
 - Config file that specifies defaults so you don't need to specify email addresses or a different interval every time.
 - Configure logging
+- Define body message and /proc/PID/status fields in config
 - Record other proc stats
 - Code may not be as exception tolerant as it should be. Need to place try blocks in appropriate locations.
 - Rare race condition where a PID is found but ends before /proc/PID is read.
@@ -100,3 +109,4 @@ These are some ideas and known issues I have; if any of these is particularly im
 - Alert on high-memory and high-CPU usage
 - Add --command-args option
 - RegEx flags
+- Make installable from pip
