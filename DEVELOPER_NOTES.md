@@ -47,3 +47,7 @@ The main critic wrote [python-inotify](https://bitbucket.org/JanKanis/python-ino
 Advantage to inotify is **process-watcher** won't miss a process that spawns and ends in between checks.
 
 Leaning toward inotify, but need to research file-system watching more.
+
+# Checking if process is running
+
+On unix systems, os.kill(pid, 0) can be used to check if a PID is still running. However, it's only slightly faster than os.path.exists('/proc/PID') and suffers from PermissionError when the process is under a different PID. Code could be written to swap between implementations, but this is overoptimizing.

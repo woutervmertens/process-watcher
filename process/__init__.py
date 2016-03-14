@@ -2,6 +2,7 @@
 """
 
 from datetime import datetime
+import time
 import os
 import os.path as P
 
@@ -46,6 +47,8 @@ class ProcessByPID:
     def __init__(self, pid):
 
         self.pid = pid
+        self.running = True
+        self.ended_datetime = None
 
         # Mapping of each status_fields to value from the status file.
         # Initialize fields to zero in case info() is called.
@@ -56,7 +59,6 @@ class ProcessByPID:
             raise NoProcessFound(pid)
 
         self.status_path = P.join(path, 'status')
-        self.running = True
 
         # Get the command that started the process
         with open(P.join(path, 'cmdline')) as f:
@@ -76,7 +78,7 @@ class ProcessByPID:
         # Get the start time (/proc/PID file creation time)
         self.created_datetime = datetime.fromtimestamp(P.getctime(path))
 
-        self.update_status()
+        self.check()
 
     def info(self):
         """Get information about process.
@@ -88,7 +90,9 @@ class ProcessByPID:
             return INFO_ENDED_FORMAT.format(**self.__dict__)
 
     def update_status(self):
-        """Update memory statistics"""
+        """Update status statistics from file at self.status_path
+        """
+
         # Memory information can be found in status and statm /proc/PID files
         # status file VmRSS equivalent to top's RES column
         # statm disagrees with status VmRSS, I think it may not include
@@ -99,6 +103,7 @@ class ProcessByPID:
         #       * VmHWM: Peak resident set size ("high water mark").
         #       * VmRSS: Resident set size.
 
+        # status_fields should be ordered as in the status file
         fields = iter(self.status_fields)
         field = next(fields)
         with open(self.status_path) as f:
@@ -112,15 +117,20 @@ class ProcessByPID:
                     try:
                         field = next(fields)
                     except StopIteration:
+                        # Just found the last field in status_fields
                         break
 
     def check(self):
-        """Check whether process is running and update stats
+        """Check whether process is running and update statistics if it is.
         :return True if running, otherwise False
         """
 
         if not self.running:
             return False
+
+        # On my machine, os.kill is faster and takes ~0.3usec while os.stat and P.exists take ~1.5usec (using timeit)
+        # However, with kill if the process is under a separate UID, PermissionError is raised
+        # Could try os.kill and fallback to P.exists and save the choice, but that's just overcomplicated
 
         running = P.exists(self.path)
         if running:
@@ -129,8 +139,9 @@ class ProcessByPID:
             # Process ended since last check, recond end time
             self.running = False
             self.ended_datetime = datetime.now()
+            # TODO duration attribute could have a value while running; update in getter method
             self.duration = self.ended_datetime - self.created_datetime
-            # Looks like 3:06:29.873626   cutoff microseconds
+            # Formats like 3:06:29.873626, so cutoff microseconds
             text = str(self.duration)
             self.duration_text = text[:text.rfind('.')]
 
@@ -140,22 +151,29 @@ class ProcessByPID:
         return self.pid == other.pid
 
 
-def all_processes(yield_None=False):
+def all_processes(yield_None=False, cleanup_seen_interval=300):
     """yields every PID seen in /proc once.
 
     :param yield_None: yield None instead of raising StopIteration if no new processes.
+    :param cleanup_seen_interval: how often to clean set of seen PIDs (seconds) default 5 min
     :return PID or None if no new processes
     """
+    time_now = time.time
+    # Designed to avoid creating objects within loop
     seen = set()
+    new_pids = []
+    last_cleanup_time = time_now()
     while True:
-        current_pids = set()
+        # new_pids starts empty
         for file in os.listdir(PROC_DIR):
             try:
-                current_pids.add(int(file))
+                pid = int(file)
+                if pid not in seen:
+                    new_pids.append(pid)
             except ValueError:
+                # Non PID file in /proc
                 pass
 
-        new_pids = current_pids - seen
         if not new_pids:
             if yield_None:
                 yield None
@@ -163,10 +181,23 @@ def all_processes(yield_None=False):
             else:
                 return
 
-        seen.update(new_pids)
-
+        # Otherwise, have new PIDs to process
         for pid in new_pids:
             yield pid
+
+        if time_now() - last_cleanup_time > cleanup_seen_interval:
+            # Time to cleanup seen set
+            to_remove = set()
+            for pid in seen:
+                # Remove from seen if PID no longer running
+                if not P.exists(P.join(PROC_DIR, str(pid))):
+                    to_remove.add(pid)
+
+            seen -= to_remove
+            last_cleanup_time = time_now()
+
+        seen.update(new_pids)
+        new_pids.clear()
 
 
 def pids_with_command_name(pid_generator, *re_objs):

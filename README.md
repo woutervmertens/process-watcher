@@ -105,7 +105,6 @@ So I decided to create this to refresh my Python skills and hopefully create som
 
 These are some ideas and known issues I have; if any of these is particularly important to you, please create a GitHub issue (or PR) and describe your requirements and suggestions. Otherwise, I have no way of knowing what changes users want.
 
-- Recycled PIDs won't be detected in --watch-new mode
 - Config file that specifies defaults so you don't need to specify email addresses or a different interval every time.
 - Configure logging
 - Define body message and /proc/PID/status fields in config

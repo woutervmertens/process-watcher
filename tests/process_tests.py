@@ -12,7 +12,9 @@ class ProcessTests(unittest.TestCase):
     def test_all_processes(self):
         """Verify that all_processes yields each PID once and finds new processes."""
 
-        processes = all_processes(yield_None=True)
+        start_time = time.time()
+        cleanup_seen_interval = 0.05
+        processes = all_processes(yield_None=True, cleanup_seen_interval=cleanup_seen_interval)
         proc_list = []
         for p in processes:
             if p is None:
@@ -31,7 +33,7 @@ class ProcessTests(unittest.TestCase):
 
         new_process = next(processes)
         while new_process is None:
-            time.sleep(0.1)
+            time.sleep(0.005)
             new_process = next(processes)
 
         self.assertEqual(new_process, sleep_process.pid)
@@ -39,6 +41,18 @@ class ProcessTests(unittest.TestCase):
 
         # There's a slight chance a new process could appear, but unlikely
         self.assertIsNone(next(processes))
+
+        sleep_process.kill()  # avoid confusing other tests
+        sleep_process.communicate()
+
+        print('first part of test took {} sec'.format(time.time() - start_time))
+
+        # Trigger cleanup
+        sleep_process = subprocess.Popen(['sleep', '5'])
+        time.sleep(cleanup_seen_interval)
+        for pid in processes:
+            if pid is None:
+                break
 
         sleep_process.kill()  # avoid confusing other tests
         sleep_process.communicate()
