@@ -63,19 +63,22 @@ Arguments from **process_watcher --help**
 
 ```
 [+] indicates the argument may be specified multiple times, for example:
- process-watcher -p 1234 -p 4258 -c myapp -c "exec\d+" --to person1@domain.com --to person2@someplace.com
+ process-watcher -p 1234 -p 4258 -c myapp* -crx "exec\d+" --to person1@domain.com --to person2@someplace.com
 
 optional arguments:
   -h, --help            show this help message and exit
   -p PID, --pid PID     process ID(s) to watch [+]
   -c COMMAND_PATTERN, --command COMMAND_PATTERN
-                        watch all processes matching the command name. (RegEx pattern) [+]
+                        watch all processes matching the command name pattern. (shell-style wildcards) [+]
+  -crx COMMAND_REGEX, --command-regex COMMAND_REGEX
+                        watch all processes matching the command name regular expression. [+]
   -w, --watch-new       watch for new processes that match --command. (run forever)
   --to EMAIL_ADDRESS    email address to send to [+]
   -n, --notify          send DBUS Desktop notification
   -i SECONDS, --interval SECONDS
                         how often to check on processes. (default: 15.0 seconds)
-  -q, --quiet           don't print anything to stdout
+  -q, --quiet           don't print anything to stdout except warnings and errors
+  --log                 log style output (timestamps and log level)
 ```
 
 # Optional Dependencies
@@ -109,7 +112,6 @@ These are some ideas and known issues I have; if any of these is particularly im
 - Configure logging
 - Define body message and /proc/PID/status fields in config
 - Record other proc stats
-- Code may not be as exception tolerant as it should be. Need to place try blocks in appropriate locations.
 - Rare race condition where a PID is found but ends before /proc/PID is read.
 - Package so installable easily with pip
 - MacOS support? Need someone to test.

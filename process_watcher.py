@@ -124,14 +124,22 @@ try:
         time.sleep(args.interval)
         # Need to iterate copy since removing within loop.
         for pid, process in watched_processes.items():
-            running = process.check()
-            if not running:
-                to_delete.append(pid)
+            try:
+                running = process.check()
+                if not running:
+                    to_delete.append(pid)
 
-                logging.info('Process stopped\n%s', process.info())
+                    logging.info('Process stopped\n%s', process.info())
 
-                for comm, send_args in comms:
-                    comm.send(process=process, **send_args)
+                    for comm, send_args in comms:
+                        comm.send(process=process, **send_args)
+
+            except:
+                logging.exception('Exception encountered while checking or communicating about process {}'.format(pid))
+
+                if pid not in to_delete:
+                    # Exception raised in check(), queue PID to be deleted
+                    to_delete.append(pid)
 
         if to_delete:
             for pid in to_delete:
@@ -141,8 +149,12 @@ try:
 
         if watch_new:
             for pid in process_matcher.matching(new_processes):
-                watched_processes[pid] = p = ProcessByPID(pid)
-                logging.info('watching new process\n%s', p.info())
+                try:
+                    watched_processes[pid] = p = ProcessByPID(pid)
+                    logging.info('watching new process\n%s', p.info())
+
+                except:
+                    logging.exception('Exception encountered while attempting to watch new process {}'.format(pid))
 
         elif not watched_processes:
             sys.exit()
