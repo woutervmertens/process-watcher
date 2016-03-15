@@ -94,7 +94,7 @@ except NoProcessFound as ex:
 
 command_regexs = [re.compile(pat) for pat in args.command]
 if command_regexs:
-    new_processes = all_processes(yield_None=True)
+    new_processes = ProcessIDs()
     for pid in pids_with_command_name(new_processes, *command_regexs):
         if pid not in processes:
             processes[pid] = ProcessByPID(pid)

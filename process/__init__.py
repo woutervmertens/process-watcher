@@ -5,8 +5,10 @@ from datetime import datetime
 import time
 import os
 import os.path as P
+from collections import deque
 
 PROC_DIR = '/proc'
+time_now = time.time
 
 # Information text format for
 #  ProcessByPID class
@@ -151,41 +153,21 @@ class ProcessByPID:
         return self.pid == other.pid
 
 
-def all_processes(yield_None=False, cleanup_seen_interval=300):
-    """yields every PID seen in /proc once.
-
-    :param yield_None: yield None instead of raising StopIteration if no new processes.
-    :param cleanup_seen_interval: how often to clean set of seen PIDs (seconds) default 5 min
-    :return PID or None if no new processes
+class ProcessIDs:
+    """Provides an iterator over the current PIDs and any new ones spawned over time.
     """
-    time_now = time.time
-    # Designed to avoid creating objects within loop
-    seen = set()
-    new_pids = []
-    last_cleanup_time = time_now()
-    while True:
-        # new_pids starts empty
-        for file in os.listdir(PROC_DIR):
-            try:
-                pid = int(file)
-                if pid not in seen:
-                    new_pids.append(pid)
-            except ValueError:
-                # Non PID file in /proc
-                pass
 
-        if not new_pids:
-            if yield_None:
-                yield None
-                continue
-            else:
-                return
+    def __init__(self, cleanup_seen_interval=300):
+        self.cleanup_seen_interval = cleanup_seen_interval
+        self.last_cleanup_time = time_now()
+        self.seen = set()
+        self._new_pids = deque()
 
-        # Otherwise, have new PIDs to process
-        for pid in new_pids:
-            yield pid
-
-        if time_now() - last_cleanup_time > cleanup_seen_interval:
+    def __iter__(self):
+        """Loads new PIDs spawned since last iteration to be iterated over via next()
+        """
+        seen = self.seen
+        if time_now() - self.last_cleanup_time > self.cleanup_seen_interval:
             # Time to cleanup seen set
             to_remove = set()
             for pid in seen:
@@ -194,11 +176,28 @@ def all_processes(yield_None=False, cleanup_seen_interval=300):
                     to_remove.add(pid)
 
             seen -= to_remove
-            last_cleanup_time = time_now()
+            self.last_cleanup_time = time_now()
 
-        seen.update(new_pids)
-        new_pids.clear()
+        for file in os.listdir(PROC_DIR):
+            try:
+                pid = int(file)
+                if pid not in seen:
+                    self._new_pids.append(pid)
 
+            except ValueError:
+                # Non PID file in /proc
+                pass
+
+        seen.update(self._new_pids)
+
+        return self
+
+    def __next__(self):
+        if self._new_pids:
+            return self._new_pids.popleft()
+
+        else:
+            raise StopIteration
 
 def pids_with_command_name(pid_generator, *re_objs):
     """Get a PID list of all processes matching the compiled regular expression object.
@@ -209,9 +208,6 @@ def pids_with_command_name(pid_generator, *re_objs):
     """
     pids = []
     for pid in pid_generator:
-        if pid is None:
-            break
-
         path = P.join(PROC_DIR, str(pid), 'comm')
         with open(path) as f:
             comm = f.read().rstrip()
