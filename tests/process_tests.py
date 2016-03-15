@@ -46,29 +46,54 @@ class ProcessTests(unittest.TestCase):
         self.assertNotIn(sleep_process.pid, processes.seen)
 
 
-    def test_pids_with_command_name(self):
+    def test_wildcard_match(self):
         """Verify pids can be found by command regex"""
 
-        re_obj = re.compile('kworker.*')
         processes = ProcessIDs()
-        pids = pids_with_command_name(processes, re_obj)
+        matcher = ProcessMatcher()
+        matcher.add_command_wildcard('kworker*')
+        pids = list(matcher.matching(processes))
         print('kworker PIDs: {}'.format(pids))
         self.assertGreater(len(pids), 0)
 
-    def test_new_command_by_name(self):
-        """Verify pids_with_command_name identifies a new process"""
+    def test_wildcard_nomatch(self):
 
-        re_obj = re.compile('sleep')
         processes = ProcessIDs()
-        pids = pids_with_command_name(processes, re_obj)
+        matcher = ProcessMatcher()
+        matcher.add_command_wildcard('aoeutshoaeutnhoeunaotehuoensuhtnaoeunth')
+        pids = list(matcher.matching(processes))
         self.assertFalse(pids)
 
-        sleep_process = subprocess.Popen(['sleep', '5'])
-        pids = pids_with_command_name(processes, re_obj)
-        self.assertListEqual([sleep_process.pid], pids)
+    def test_regex_match(self):
+        """Verify pids_with_command_name identifies a new process"""
 
-        sleep_process.kill()
-        sleep_process.communicate()
+        processes = ProcessIDs()
+        matcher = ProcessMatcher()
+        matcher.add_command_regex('kworker.+')
+        pids = list(matcher.matching(processes))
+        print('kworker PIDs: {}'.format(pids))
+        self.assertGreater(len(pids), 0)
+
+    def test_regex_nomatch(self):
+        processes = ProcessIDs()
+        matcher = ProcessMatcher()
+        matcher.add_command_regex('oenuthoeuaseouoaenuthoeauaoseunth')
+        pids = list(matcher.matching(processes))
+        self.assertFalse(pids)
+
+    def test_regex_nomatch2(self):
+        processes = ProcessIDs()
+        matcher = ProcessMatcher()
+        matcher.add_command_regex('worker.+')
+        pids = list(matcher.matching(processes))
+        self.assertFalse(pids)
+
+    def test_regex_nomatch3(self):
+        processes = ProcessIDs()
+        matcher = ProcessMatcher()
+        matcher.add_command_regex('kworker')
+        pids = list(matcher.matching(processes))
+        self.assertFalse(pids)
 
     def test_process_obj_identity(self):
         """Verify ProcessByPID identity behavior"""

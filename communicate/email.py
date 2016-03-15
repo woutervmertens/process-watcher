@@ -1,4 +1,5 @@
 
+import logging
 import smtplib
 from email.mime.text import MIMEText
 
@@ -24,7 +25,7 @@ def send(to=None, process=None, subject_format='{executable} process {pid} ended
     # Send the message via our own SMTP server.
     s = smtplib.SMTP('localhost')
     try:
-        print('Sending email to: {}'.format(msg['To']))
+        logging.info('Sending email to: {}'.format(msg['To']))
         s.send_message(msg)
     finally:
         s.quit()

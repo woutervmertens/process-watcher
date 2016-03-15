@@ -6,6 +6,8 @@ import time
 import os
 import os.path as P
 from collections import deque
+from fnmatch import fnmatch
+import re
 
 PROC_DIR = '/proc'
 time_now = time.time
@@ -199,21 +201,58 @@ class ProcessIDs:
         else:
             raise StopIteration
 
-def pids_with_command_name(pid_generator, *re_objs):
-    """Get a PID list of all processes matching the compiled regular expression object.
 
-    :param pid_generator: object yielding PIDs to check. (stops checking if yields None)
-    :param re_objs: compiled regular expressions to match against (from re.compile)
-    :return: list of PIDs (int)
-    """
-    pids = []
-    for pid in pid_generator:
-        path = P.join(PROC_DIR, str(pid), 'comm')
-        with open(path) as f:
-            comm = f.read().rstrip()
-            for re_obj in re_objs:
-                if re_obj.match(comm):
-                    pids.append(pid)
-                    break
+class ProcessMatcher:
+    """Provides various conditions to match against process metadata"""
 
-    return pids
+    def __init__(self):
+        self._command_wildcards = []
+        self._command_regexs = []
+
+    def matches(self, pid):
+        """Check if conditions match the process specified by the PID.
+
+        :param pid: Running process PID to inspect
+        :return: True if matches, otherwise False
+        """
+        if self._command_wildcards or self._command_regexs:
+            # Matchers requiring comm file
+            path = P.join(PROC_DIR, str(pid), 'comm')
+            with open(path) as f:
+                comm = f.read().rstrip()
+                for pattern in self._command_wildcards:
+                    if fnmatch(comm, pattern):
+                        return True
+
+                for re_obj in self._command_regexs:
+                    if re_obj.match(comm):
+                        return True
+
+        return False
+
+    def matching(self, pids):
+        """yields PIDs from the provided iterator that match conditions.
+        """
+        for pid in pids:
+            if self.matches(pid):
+                yield pid
+
+    @property
+    def num_conditions(self):
+        return len(self._command_wildcards) + len(self._command_regexs)
+
+    def add_command_wildcard(self, pattern):
+        """Match processes whose command matches the pattern. (fnmatch)
+        :param pattern: wildcard pattern (*,?, [])
+        """
+        self._command_wildcards.append(pattern)
+
+    def add_command_regex(self, pattern):
+        """Match processes whose command matches the Regular Expression.
+
+        :param pattern: Regular Expression string
+        """
+        # Make regex match consistent with wildcards, i.e. full string match
+        if not pattern.endswith('$'):
+            pattern += '$'
+        self._command_regexs.append(re.compile(pattern))

@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 
 import sys
-import time
 import argparse
 from argparse import RawTextHelpFormatter
-import re
 import logging
 
 from process import *
-
-logging.basicConfig(format='%(levelname)s: %(message)s')
 
 # Remember to update README.md after modifying
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -18,14 +14,18 @@ communication protocols.
 (See README.md for help installing dependencies)
 
 [+] indicates the argument may be specified multiple times, for example:
- %(prog)s -p 1234 -p 4258 -c myapp -c "exec\d+" --to person1@domain.com --to person2@someplace.com
+ %(prog)s -p 1234 -p 4258 -c myapp* -crx "exec\d+" --to person1@domain.com --to person2@someplace.com
 """)
 
 parser.add_argument('-p', '--pid', help='process ID(s) to watch [+]',
                     type=int,
                     action='append', default=[])
-parser.add_argument('-c', '--command', help='watch all processes matching the command name. (RegEx pattern) [+]',
+parser.add_argument('-c', '--command',
+                    help='watch all processes matching the command name pattern. (shell-style wildcards) [+]',
                     action='append', default=[], metavar='COMMAND_PATTERN')
+parser.add_argument('-crx', '--command-regex',
+                    help='watch all processes matching the command name regular expression. [+]',
+                    action='append', default=[], metavar='COMMAND_REGEX')
 parser.add_argument('-w', '--watch-new', help='watch for new processes that match --command. '
                                               '(run forever)', action='store_true')
 parser.add_argument('--to', help='email address to send to [+]',
@@ -33,8 +33,9 @@ parser.add_argument('--to', help='email address to send to [+]',
 parser.add_argument('-n', '--notify', help='send DBUS Desktop notification', action='store_true')
 parser.add_argument('-i', '--interval', help='how often to check on processes. (default: 15.0 seconds)',
                     type=float, default=15.0, metavar='SECONDS')
-parser.add_argument('-q', '--quiet', help="don't print anything to stdout",
+parser.add_argument('-q', '--quiet', help="don't print anything to stdout except warnings and errors",
                     action='store_true')
+parser.add_argument('--log', help="log style output (timestamps and log level)", action='store_true')
 
 # Just print help and exit if no arguments specified.
 if len(sys.argv) == 1:
@@ -44,10 +45,10 @@ if len(sys.argv) == 1:
 
 args = parser.parse_args()
 
-# Shadow built-in print that does nothing if --quiet specified
-if args.quiet:
-    def print(*args, **kwargs):
-        pass
+log_level = logging.WARNING if args.quiet else logging.INFO
+log_format = '%(asctime)s %(levelname)s: %(message)s' if args.log else '%(message)s'
+logging.basicConfig(format=log_format, level=log_level)
+
 
 # Load communication protocols based present arguments
 # (library, send function keyword args)
@@ -80,66 +81,72 @@ if args.notify:
 
 # dict of all the process watching objects pid -> ProcessByPID
 # items removed when process ends
-processes = {}
+watched_processes = {}
 
 # Initialize processes from arguments, get metadata
-try:
-    for pid in args.pid:
-        if pid not in processes:
-            processes[pid] = ProcessByPID(pid)
+for pid in args.pid:
+    try:
+        if pid not in watched_processes:
+            watched_processes[pid] = ProcessByPID(pid)
 
-except NoProcessFound as ex:
-    print('No process with PID {}'.format(ex.pid))
-    sys.exit(1)
+    except NoProcessFound as ex:
+        logging.warning('No process with PID {}'.format(ex.pid))
 
-command_regexs = [re.compile(pat) for pat in args.command]
-if command_regexs:
-    new_processes = ProcessIDs()
-    for pid in pids_with_command_name(new_processes, *command_regexs):
-        if pid not in processes:
-            processes[pid] = ProcessByPID(pid)
+process_matcher = ProcessMatcher()
+new_processes = ProcessIDs()
+
+for pattern in args.command:
+    process_matcher.add_command_wildcard(pattern)
+
+for regex in args.command_regex:
+    process_matcher.add_command_regex(regex)
+
+# Initial processes matching conditions
+for pid in process_matcher.matching(new_processes):
+    if pid not in watched_processes:
+        watched_processes[pid] = ProcessByPID(pid)
 
 # Whether program needs to check for new processes matching conditions
-watch_new = args.watch_new and len(command_regexs) > 0
+# Would a user ever watch for a specific PID number to recur?
+watch_new = args.watch_new and process_matcher.num_conditions > 0
 
-if not processes and not watch_new:
-    print('No processes found to watch.')
+if not watched_processes and not watch_new:
+    logging.warning('No processes found to watch.')
     sys.exit()
 
-print('Watching {} processes:'.format(len(processes)))
-for pid, process in processes.items():
-    print(process.info())
+logging.info('Watching {} processes:'.format(len(watched_processes)))
+for pid, process in watched_processes.items():
+    logging.info(process.info())
 
 try:
     to_delete = []
     while True:
         time.sleep(args.interval)
         # Need to iterate copy since removing within loop.
-        for pid, process in processes.items():
+        for pid, process in watched_processes.items():
             running = process.check()
             if not running:
                 to_delete.append(pid)
 
-                print('Process stopped:')
-                print(process.info())
+                logging.info('Process stopped\n%s', process.info())
 
                 for comm, send_args in comms:
                     comm.send(process=process, **send_args)
 
         if to_delete:
             for pid in to_delete:
-                del processes[pid]
+                del watched_processes[pid]
 
             to_delete.clear()
 
         if watch_new:
-            for pid in pids_with_command_name(new_processes, *command_regexs):
-                if pid not in processes:
-                    processes[pid] = p = ProcessByPID(pid)
-                    print(p.info())
+            for pid in process_matcher.matching(new_processes):
+                watched_processes[pid] = p = ProcessByPID(pid)
+                logging.info('watching new process\n%s', p.info())
 
-        elif not processes:
+        elif not watched_processes:
             sys.exit()
 
 except KeyboardInterrupt:
-    print('\n')
+    # Force command prompt onto new line
+    print()
