@@ -65,7 +65,7 @@ class ProcessByPID:
         self.status_path = P.join(path, 'status')
 
         # Get the command that started the process
-        with open(P.join(path, 'cmdline')) as f:
+        with open(P.join(path, 'cmdline'), encoding='utf-8') as f:
             cmd = f.read()
             # args are separated by \x00 (Null byte)
             self.command = cmd.replace('\x00', ' ').strip()
