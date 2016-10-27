@@ -28,8 +28,8 @@ parser.add_argument('-crx', '--command-regex',
                     action='append', default=[], metavar='COMMAND_REGEX')
 parser.add_argument('-w', '--watch-new', help='watch for new processes that match --command. '
                                               '(run forever)', action='store_true')
-parser.add_argument('--to', help='email address to send to [+]',
-                    action='append', metavar='EMAIL_ADDRESS')
+parser.add_argument('--to', help='email address to send to [+]', action='append', metavar='EMAIL_ADDRESS')
+parser.add_argument('--channel', help='channel to send to [+]', action='append')
 parser.add_argument('-n', '--notify', help='send DBUS Desktop notification', action='store_true')
 parser.add_argument('-i', '--interval', help='how often to check on processes. (default: 15.0 seconds)',
                     type=float, default=15.0, metavar='SECONDS')
@@ -59,6 +59,14 @@ if args.to:
         comms.append((communicate.email, {'to': args.to}))
     except:
         logging.exception('Failed to load email module. (required by --to)')
+        sys.exit(1)
+
+if args.channel:
+    try:
+        import communicate.slack
+        comms.append((communicate.slack, {'channel': args.channel}))
+    except:
+        logging.exception('Failed to load slack module. (required by --channel)')
         sys.exit(1)
 
 if args.notify:
