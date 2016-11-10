@@ -36,6 +36,7 @@ parser.add_argument('-i', '--interval', help='how often to check on processes. (
 parser.add_argument('-q', '--quiet', help="don't print anything to stdout except warnings and errors",
                     action='store_true')
 parser.add_argument('--log', help="log style output (timestamps and log level)", action='store_true')
+parser.add_argument('--tag', help='label for process [+]', action='append', metavar='LABEL')
 
 # Just print help and exit if no arguments specified.
 if len(sys.argv) == 1:
@@ -140,7 +141,12 @@ try:
                     logging.info('Process stopped\n%s', process.info())
 
                     for comm, send_args in comms:
-                        comm.send(process=process, **send_args)
+                        if args.tag:
+                            template = '{executable} process {pid} ended' + ': {}'.format(args.tag)
+                        else:
+                            template = '{executable} process {pid} ended'
+                        
+                        comm.send(process=process, subject_format=template, **send_args)
 
             except:
                 logging.exception('Exception encountered while checking or communicating about process {}'.format(pid))

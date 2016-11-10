@@ -27,7 +27,6 @@ def send(channel=None, process=None):
     payload = json.dumps({"text": body, "icon_emoji": ":computer:"})
     url = "https://hooks.slack.com/services/{}".format(channel)
 
-    logging.info('Notifying: {}'.format(channel))
     cmd = cmd_template.format(payload,url)
     ret = subprocess.call(cmd,shell=True)
     if ret:
