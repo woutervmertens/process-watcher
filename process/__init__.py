@@ -218,15 +218,19 @@ class ProcessMatcher:
         if self._command_wildcards or self._command_regexs:
             # Matchers requiring comm file
             path = P.join(PROC_DIR, str(pid), 'comm')
-            with open(path) as f:
-                comm = f.read().rstrip()
-                for pattern in self._command_wildcards:
-                    if fnmatch(comm, pattern):
-                        return True
+            try:
+                with open(path) as f:
+                    comm = f.read().rstrip()
+                    for pattern in self._command_wildcards:
+                        if fnmatch(comm, pattern):
+                            return True
 
-                for re_obj in self._command_regexs:
-                    if re_obj.match(comm):
-                        return True
+                    for re_obj in self._command_regexs:
+                        if re_obj.match(comm):
+                            return True
+            except FileNotFoundError:
+                # process may have exited before file could be read
+                return False
 
         return False
 
