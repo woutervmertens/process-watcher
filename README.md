@@ -1,13 +1,11 @@
 **Status:** I am not actively working on this project. A number of people have forked it, which is nice to see, but makes it difficult for people to collaborate. If you have created a fork that you think is high-quality and useful for everyone and want to encourage people to use it, let me know and we could look into merging it in and transfering project ownership or granting you project permissions. Or if you just want me to advertise it here, let me know.
 
 # process-watcher
-Watch Linux processes and notify when they complete. Should also work with MacOS*.
+Watch Linux processes and notify when they complete.*.
 
 Only needs the */proc* pseudo-filesystem to check and gather information about processes. Does not need to create/own the process, if you want a daemon manager, see the *Alternatives* section below.
 
 Currently written for **Python3**, but shouldn't be difficult to make python2 compatible.
-
-\**If you run process-watcher on MacOS and it works, let me know so I can update the documentation.* 
 
 **Supported notification methods:**
 
@@ -116,7 +114,7 @@ These are some ideas and known issues I have; if any of these is particularly im
 - Record other proc stats
 - Rare race condition where a PID is found but ends before /proc/PID is read.
 - Package so installable easily with pip
-- MacOS support? Need someone to test.
+- MacOS support? Could be implemented with [psutil](https://github.com/giampaolo/psutil)
 - Other communication protocols. XMPP? Unix command
 - Alert on high-memory and high-CPU usage
 - Add --command-args option
