@@ -4,8 +4,32 @@ import sys
 import argparse
 from argparse import RawTextHelpFormatter
 import logging
+import json
 
+from dataclasses import dataclass
 from process import *
+
+@dataclass
+class JsonItems:
+    to = []
+    commands = []
+    commands_regex = []
+    pids = []
+
+
+def readjson(jsonfile):
+    with open(jsonfile) as f:
+        data = json.load(f)
+        items = JsonItems()
+        items.to = data['to']
+        for d in data['processes']:
+            if d['command'] != '':
+                items.commands.append(d['command'])
+            if d['regex'] != '':
+                items.commands_regex.append(d['regex'])
+            if d['pid'] != '':
+                items.pids.append(d['pid'])
+
 
 # Remember to update README.md after modifying
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -37,6 +61,8 @@ parser.add_argument('-q', '--quiet', help="don't print anything to stdout except
                     action='store_true')
 parser.add_argument('--log', help="log style output (timestamps and log level)", action='store_true')
 parser.add_argument('--tag', help='label for process [+]', action='append', metavar='LABEL')
+parser.add_argument('-j', '--json', help='json file path to import PIDs, commands, emails and messages from',
+                    action='append', metavar='JSON_FILE')
 
 # Just print help and exit if no arguments specified.
 if len(sys.argv) == 1:
@@ -110,6 +136,32 @@ for pattern in args.command:
 for regex in args.command_regex:
     process_matcher.add_command_regex(regex)
 
+if args.json:
+    json_data = readjson(args.json)
+
+    if json_data.to:
+        try:
+            import communicate.email
+        except:
+            logging.exception('Failed to load email module. (required by --to)')
+            sys.exit(1)
+    for tos in json_data.to:
+        comms.append((communicate.email, {'to': args.to}))
+
+    for pid in json_data.pids:
+        try:
+            if pid not in watched_processes:
+                watched_processes[pid] = ProcessByPID(pid)
+
+        except NoProcessFound as ex:
+            logging.warning('No process with PID {}'.format(ex.pid))
+
+    for pattern in json_data.commands:
+        process_matcher.add_command_wildcard(pattern)
+
+    for regex in json_data.commands_regex:
+        process_matcher.add_command_regex(regex)
+
 # Initial processes matching conditions
 for pid in process_matcher.matching(new_processes):
     if pid not in watched_processes:
@@ -145,7 +197,7 @@ try:
                             template = '{executable} process {pid} ended' + ': {}'.format(args.tag)
                         else:
                             template = '{executable} process {pid} ended'
-                        
+
                         comm.send(process=process, subject_format=template, **send_args)
 
             except:

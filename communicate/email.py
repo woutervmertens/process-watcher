@@ -4,7 +4,7 @@ import smtplib
 from email.mime.text import MIMEText
 
 
-def send(to=None, process=None, subject_format='{executable} process {pid} ended'):
+def send(to=None, process=None, machine='VTAG0', subject_format='{executable} process {pid} ended'):
     """Send email about the ended process.
 
     :param to: email addresses to send to
@@ -14,10 +14,13 @@ def send(to=None, process=None, subject_format='{executable} process {pid} ended
     if to is None:
         raise ValueError('to keyword arg required')
 
-    body = process.info()
+    body = "Process has stopped."
+    body += '\n\n'
+    body += process.info()
     body += '\n\n(automatically sent by process-watcher program)'
     msg = MIMEText(body)
-    msg['Subject'] = subject_format.format(**process.__dict__)
+    flag = '[{} ALERT]'.format(machine)
+    msg['Subject'] = flag + subject_format.format(**process.__dict__)
     # From is required
     msg['From'] = 'process.watcher@localhost'
     msg['To'] = ', '.join(to)

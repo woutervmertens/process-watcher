@@ -1,0 +1,23 @@
+{
+  "to": [""],
+  "processes" : [
+    {
+      "name" : "pattern",
+      "pid" : "",
+      "command" : "",
+      "regex" : ""
+    },
+    {
+      "name" : "dropbox",
+      "pid" : "",
+      "command" : "dropbox",
+      "regex" : ""
+    },
+    {
+      "name" : "capture RV and sync",
+      "pid" : "",
+      "command" : "python3",
+      "regex" : ""
+    }
+  ]
+}
